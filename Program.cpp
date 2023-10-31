@@ -6,6 +6,7 @@
 #include <iterator>
 #include <string>
 #include <functional>
+#include <numeric>
 
 using namespace std;
 using namespace std::placeholders;
@@ -59,6 +60,43 @@ auto filter_words = [](const vector<string>& words, const vector<string>& filter
     });
 
     return filteredWords;
+};
+
+// key value pair of the count word result
+struct WordCount{
+    string word;
+    int value;
+};
+
+auto make_vector_unique = [](const vector<string>& vec) -> const vector<string>{
+    vector<string> copy = vec;
+
+    sort(copy.begin(), copy.end());
+    auto eraseBegin = unique(copy.begin(), copy.end());
+    copy.erase(eraseBegin, copy.end());
+
+    sort(vec.begin(), vec.end());
+};
+
+auto count_word = [](const string& word, const vector<string>& words) -> int{
+    return accumulate(words.begin(), words.end(), 0, [=](int result, const string element){
+        if(strcmp(word.c_str(), element.c_str()) == 0){
+            result++;
+        }
+
+        return result;
+    });
+};
+
+auto count_words = [](const vector<string>& words) -> vector<WordCount>{
+    const vector<string> uniqueWords = make_vector_unique(words);
+
+    vector<WordCount> wordCount;
+    transform(uniqueWords.begin(), uniqueWords.end(), wordCount, [=](const string& element){
+        return WordCount { element, count_word(element, words)};
+    });
+    
+    return wordCount;
 };
 
 void outputStrings(const vector<string>& terms){

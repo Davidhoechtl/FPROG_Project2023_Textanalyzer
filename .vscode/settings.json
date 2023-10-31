@@ -4,6 +4,10 @@
         "fstream": "cpp",
         "vector": "cpp",
         "xstring": "cpp",
-        "algorithm": "cpp"
+        "algorithm": "cpp",
+        "optional": "cpp",
+        "xutility": "cpp",
+        "numeric": "cpp",
+        "memory": "cpp"
     }
 }
