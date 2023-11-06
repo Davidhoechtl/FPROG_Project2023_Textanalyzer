@@ -7,10 +7,34 @@
 #include <string>
 #include <functional>
 #include <numeric>
+#include <map>
 
 using namespace std;
 using namespace std::placeholders;
 
+// WordResult{
+//     Word word;
+//     int density;
+//     int count;
+// }
+
+struct Word{
+    string str;
+    int indexInText;
+
+    bool operator==(Word other){
+        return str == other.str && indexInText == other.indexInText;
+    }
+};
+
+// nicht mehr verwenden
+// key value pair of the count word result
+struct WordCount{
+    string word;
+    int value;
+};
+
+#pragma region IO Reading
 auto read_lines = [](const string& filePath) -> optional<vector<string>>{
     ifstream inputFile(filePath);
 
@@ -34,13 +58,14 @@ auto split_line = [](const string& line, const char seperator){
     int startIndex = 0;
     int endIndex = 0;
     int currentIteration = 0;
-    vector<string> splittedWords;
+    vector<Word> splittedWords;
     for_each(line.begin(), line.end(), [&](const char c){
         if(c == seperator || currentIteration == line.length() - 1){
             endIndex = currentIteration;
             string subString = "";
             subString.append(line, startIndex, endIndex - startIndex);
-            splittedWords.push_back(subString);
+            Word word {subString, startIndex};
+            splittedWords.push_back(word);
             currentIteration++;
             startIndex = endIndex + 1;
         }
@@ -52,22 +77,20 @@ auto split_line = [](const string& line, const char seperator){
     return splittedWords;
 };
 
-auto filter_words = [](const vector<string>& words, const vector<string>& filter){
-    vector<string> filteredWords;
+auto filter_words = [](const vector<Word>& words, const vector<string>& filter){
+    vector<Word> filteredWords;
 
-    copy_if(words.begin(), words.end(), back_inserter(filteredWords), [=](const string word){
-        return find(filter.begin(), filter.end(), word) != filter.end();
+    int wordIndex;
+    copy_if(words.begin(), words.end(), back_inserter(filteredWords), [=, &wordIndex](const Word word){
+        return find(filter.begin(), filter.end(), word.str) != filter.end();
     });
 
     return filteredWords;
 };
+#pragma endregion IO Reading
 
-// key value pair of the count word result
-struct WordCount{
-    string word;
-    int value;
-};
-
+// verwende map um count zu ermitteln
+#pragma region count words
 auto make_vector_unique = [](const vector<string>& vec) -> const vector<string>{
     vector<string> copy = vec;
 
@@ -98,10 +121,60 @@ auto count_words = [](const vector<string>& words) -> vector<WordCount>{
     
     return wordCount;
 };
+#pragma endregion
 
+#pragma region map words
+auto map_words = [](const vector<Word>& words) -> map<string, vector<Word>>{
+    map<string, vector<Word>> map;
+    for(Word word : words){
+        vector<Word> words;
+        for(Word word2: words){
+            if(word.str == word2.str){
+                words.push_back(word2);
+            }
+        }
+        map.insert(make_pair(word.str, words));
+    }
+
+    return map;
+};
+
+auto get_term_density = [](const map<string, vector<Word>>& wordMap, const string& term) -> double{
+    auto foundPointer = wordMap.find(term);
+    if(foundPointer == wordMap.end()){
+        return -1;
+    }
+    else{
+        vector<Word> words = foundPointer->second;
+
+        if(words.size() < 2){
+            return 0;
+        }
+
+        double distanceSum = 0;
+        for (auto it = words.begin(); it != words.end(); ++it) {
+            auto next = it + 1;
+            if(next != words.end()){
+                int distance = it->indexInText - next->indexInText;
+                distanceSum += distance;
+            }
+        }
+
+        return distanceSum / words.size();
+    }
+};
+#pragma endregion map words
+
+// output (debug)
 void outputStrings(const vector<string>& terms){
     for(string term : terms){
         cout << term << endl;
+    }
+}
+
+void outputWords(const vector<Word>& terms){
+    for(Word term : terms){
+        cout << "(" << term.str << "," << term.indexInText << ")" << endl;
     }
 }
 
@@ -115,10 +188,16 @@ int main(){
     outputStrings(peaceTerms);
     outputStrings(warTerms);
 
-    string unsplittedline = read_lines("./data/test.txt").value()[0];
-    vector<string> splittedWords = split_line(unsplittedline, ' ');
+    vector<string> textLines = read_lines("./data/test.txt").value();
+    string tmp;
+    for(string line : textLines){
+        tmp.append(line);
+    }
 
-    outputStrings(splittedWords);
+    vector<Word> words = split_line(tmp, ' ');
+    // vector<Word> splittedWords = split_line(unsplittedline, ' ');
+
+    // outputWords(splittedWords);
 
     return 0;
 }

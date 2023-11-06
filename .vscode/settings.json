@@ -8,6 +8,7 @@
         "optional": "cpp",
         "xutility": "cpp",
         "numeric": "cpp",
-        "memory": "cpp"
+        "memory": "cpp",
+        "map": "cpp"
     }
 }
