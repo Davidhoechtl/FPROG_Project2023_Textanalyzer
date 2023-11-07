@@ -12,12 +12,6 @@
 using namespace std;
 using namespace std::placeholders;
 
-// WordResult{
-//     Word word;
-//     int density;
-//     int count;
-// }
-
 struct Word{
     string str;
     int indexInText;
@@ -27,11 +21,9 @@ struct Word{
     }
 };
 
-// nicht mehr verwenden
-// key value pair of the count word result
 struct WordCount{
     string word;
-    int value;
+    int count;
 };
 
 #pragma region IO Reading
@@ -77,51 +69,28 @@ auto split_line = [](const string& line, const char seperator){
     return splittedWords;
 };
 
-auto filter_words = [](const vector<Word>& words, const vector<string>& filter){
-    vector<Word> filteredWords;
+auto filter_wordResult = [](const vector<WordCount>& words, const vector<string>& filter){
+    vector<WordCount> filteredWordResult;
 
     int wordIndex;
-    copy_if(words.begin(), words.end(), back_inserter(filteredWords), [=, &wordIndex](const Word word){
+    copy_if(words.begin(), words.end(), back_inserter(filteredWordResult), [=, &wordIndex](const WordCount wordData){
+        return find(filter.begin(), filter.end(), wordData.word) != filter.end();
+    });
+
+    return filteredWordResult;
+};
+
+auto filter_words = [](const vector<Word>& words, const vector<string>& filter){
+    vector<Word> filterWords;
+
+    int wordIndex;
+    copy_if(words.begin(), words.end(), back_inserter(filterWords), [=, &wordIndex](const Word word){
         return find(filter.begin(), filter.end(), word.str) != filter.end();
     });
 
-    return filteredWords;
+    return filterWords;
 };
 #pragma endregion IO Reading
-
-// verwende map um count zu ermitteln
-#pragma region count words
-auto make_vector_unique = [](const vector<string>& vec) -> const vector<string>{
-    vector<string> copy = vec;
-
-    sort(copy.begin(), copy.end());
-    auto eraseBegin = unique(copy.begin(), copy.end());
-    copy.erase(eraseBegin, copy.end());
-
-    sort(vec.begin(), vec.end());
-};
-
-auto count_word = [](const string& word, const vector<string>& words) -> int{
-    return accumulate(words.begin(), words.end(), 0, [=](int result, const string element){
-        if(strcmp(word.c_str(), element.c_str()) == 0){
-            result++;
-        }
-
-        return result;
-    });
-};
-
-auto count_words = [](const vector<string>& words) -> vector<WordCount>{
-    const vector<string> uniqueWords = make_vector_unique(words);
-
-    vector<WordCount> wordCount;
-    transform(uniqueWords.begin(), uniqueWords.end(), wordCount, [=](const string& element){
-        return WordCount { element, count_word(element, words)};
-    });
-    
-    return wordCount;
-};
-#pragma endregion
 
 #pragma region map words
 auto map_words = [](const vector<Word>& words) -> map<string, vector<Word>>{
@@ -139,29 +108,43 @@ auto map_words = [](const vector<Word>& words) -> map<string, vector<Word>>{
     return map;
 };
 
-auto get_term_density = [](const map<string, vector<Word>>& wordMap, const string& term) -> double{
-    auto foundPointer = wordMap.find(term);
-    if(foundPointer == wordMap.end()){
-        return -1;
+auto get_term_densityv2 = [](const vector<Word>& words){
+    if(words.size() < 2){
+        return -1.0;
     }
-    else{
-        vector<Word> words = foundPointer->second;
 
-        if(words.size() < 2){
-            return 0;
+    double distanceSum = 0;
+    for (auto it = words.begin(); it != words.end(); ++it) {
+        auto next = it + 1;
+        if(next != words.end()){
+            int distance = it->indexInText - next->indexInText;
+            distanceSum += distance;
         }
-
-        double distanceSum = 0;
-        for (auto it = words.begin(); it != words.end(); ++it) {
-            auto next = it + 1;
-            if(next != words.end()){
-                int distance = it->indexInText - next->indexInText;
-                distanceSum += distance;
-            }
-        }
-
-        return distanceSum / words.size();
     }
+
+    return distanceSum / words.size();
+};
+
+auto calculate_wordCount = [](const map<string, vector<Word>>& wordMap ) ->
+vector<WordCount>{
+    vector<WordCount> result;
+
+    for_each(wordMap.begin(), wordMap.end(), [&](const pair<string, vector<Word>>& pair){
+        int wordCount = pair.second.size();
+        double wordDensity = get_term_densityv2(pair.second);
+        WordCount current {pair.first, wordCount};
+        result.push_back(current);
+    });
+
+    return result;
+};
+
+auto get_relation_value = [](const vector<WordCount>& wordData, const double& density){
+    int sumCount = accumulate(wordData.begin(), wordData.end(), 0, [](const int accumulator, const WordCount& item){
+        return accumulator + item.count;
+    });
+
+    return sumCount + (1000 - density);
 };
 #pragma endregion map words
 
@@ -179,24 +162,58 @@ void outputWords(const vector<Word>& terms){
 }
 
 int main(){
+    // get all terms
     vector<string> peaceTerms = read_lines("./data/peace_terms.txt").value();
     vector<string> warTerms = read_lines("./data/war_terms.txt").value();
 
+    // define filter functions
     auto filterPeaceTerms = bind(filter_words, _1, peaceTerms);
     auto filterWarTerms = bind(filter_words, _1, warTerms);
 
     outputStrings(peaceTerms);
     outputStrings(warTerms);
 
+    // get all lines from file
     vector<string> textLines = read_lines("./data/test.txt").value();
+
+    // flatten the lines to one string
     string tmp;
     for(string line : textLines){
         tmp.append(line);
     }
 
+    // split text to Words
     vector<Word> words = split_line(tmp, ' ');
-    // vector<Word> splittedWords = split_line(unsplittedline, ' ');
 
+    // filter war and peace tearms from text
+    vector<Word> warWords = filterWarTerms(words);
+    vector<Word> peaceWords = filterPeaceTerms(words);
+
+    // map words (key: string, value: list of words)
+    map<string, vector<Word>> warMap = map_words(warWords);
+    map<string, vector<Word>> peaceMap = map_words(peaceWords);
+
+    // calculate word count
+    vector<WordCount> warResult = calculate_wordCount(warMap);
+    vector<WordCount> peaceResult = calculate_wordCount(peaceMap);
+
+    // calculate term density
+    double warDensity = get_term_densityv2(warWords);
+    double peaceDensity = get_term_densityv2(peaceWords);
+
+    // calculate relation score
+    int warRelationValue = get_relation_value(warResult, warDensity);
+    int peaceRelationValue = get_relation_value(peaceResult, peaceDensity);
+
+    // compare relation score
+    if(warRelationValue > peaceRelationValue){
+        cout << "war related" << endl;
+    } 
+    else{
+        cout << "peace related" << endl;
+    }
+
+    // vector<Word> splittedWords = split_line(unsplittedline, ' ');
     // outputWords(splittedWords);
 
     return 0;
