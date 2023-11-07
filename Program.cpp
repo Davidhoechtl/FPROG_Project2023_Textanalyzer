@@ -50,9 +50,12 @@ auto split_line = [](const string& line, const char seperator){
     int startIndex = 0;
     int endIndex = 0;
     int currentIteration = 0;
+
+    int lineLength = line.length();
+
     vector<Word> splittedWords;
     for_each(line.begin(), line.end(), [&](const char c){
-        if(c == seperator || currentIteration == line.length() - 1){
+        if(c == seperator || currentIteration == lineLength - 1){
             endIndex = currentIteration;
             string subString = "";
             subString.append(line, startIndex, endIndex - startIndex);
@@ -69,22 +72,20 @@ auto split_line = [](const string& line, const char seperator){
     return splittedWords;
 };
 
-auto filter_wordResult = [](const vector<WordCount>& words, const vector<string>& filter){
-    vector<WordCount> filteredWordResult;
+// auto filter_wordResult = [](const vector<WordCount>& words, const vector<string>& filter){
+//     vector<WordCount> filteredWordResult;
 
-    int wordIndex;
-    copy_if(words.begin(), words.end(), back_inserter(filteredWordResult), [=, &wordIndex](const WordCount wordData){
-        return find(filter.begin(), filter.end(), wordData.word) != filter.end();
-    });
+//     copy_if(words.begin(), words.end(), back_inserter(filteredWordResult), [=](const WordCount wordData){
+//         return find(filter.begin(), filter.end(), wordData.word) != filter.end();
+//     });
 
-    return filteredWordResult;
-};
+//     return filteredWordResult;
+// };
 
 auto filter_words = [](const vector<Word>& words, const vector<string>& filter){
     vector<Word> filterWords;
 
-    int wordIndex;
-    copy_if(words.begin(), words.end(), back_inserter(filterWords), [=, &wordIndex](const Word word){
+    copy_if(words.begin(), words.end(), back_inserter(filterWords), [=](const Word word){
         return find(filter.begin(), filter.end(), word.str) != filter.end();
     });
 
@@ -131,7 +132,6 @@ vector<WordCount>{
 
     for_each(wordMap.begin(), wordMap.end(), [&](const pair<string, vector<Word>>& pair){
         int wordCount = pair.second.size();
-        double wordDensity = get_term_densityv2(pair.second);
         WordCount current {pair.first, wordCount};
         result.push_back(current);
     });
