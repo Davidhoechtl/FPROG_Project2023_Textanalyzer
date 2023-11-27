@@ -8,15 +8,16 @@
 #include <functional>
 #include <numeric>
 #include <map>
+#include <regex>
 
 using namespace std;
 using namespace std::placeholders;
 
-struct Word{
+struct Word {
     string str;
     int indexInText;
 
-    bool operator==(Word other){
+    bool operator==(const Word& other) const {
         return str == other.str && indexInText == other.indexInText;
     }
 };
@@ -26,16 +27,45 @@ struct WordCount{
     int count;
 };
 
+struct TermDensity {
+    int warDensity;
+    int peaceDensity;
+};
+
+enum struct Relation {
+    WAR = 0,
+    PEACE = 1
+};
+
+// output (debug)
+void outputStrings(const vector<string>& terms) {
+    for_each(terms.begin(), terms.end(), [](const string& term){
+        cout << term << endl;
+    });
+}
+
+void outputWords(const vector<Word>& terms) {
+    for_each(terms.begin(), terms.end(), [](const Word& term){
+        cout << "(" << term.str << "," << term.indexInText << ")" << endl;
+    });
+}
+
+void print_evaluations(const map<int, Relation>& evaluations) {
+    for_each(evaluations.begin(), evaluations.end(), [](const auto& pair) {
+        cout << "Chapter " << pair.first << ": " << relationToString(pair.second) << "-related" << endl;
+    });
+}
+
 #pragma region IO Reading
-auto read_lines = [](const string& filePath) -> optional<vector<string>>{
+//Step 2: Read files
+auto read_lines = [](const string& filePath) -> optional<vector<string>> {
     ifstream inputFile(filePath);
 
     if(inputFile.is_open()){
         vector<string> values;
 
         string line;
-        while(!inputFile.eof()){
-            getline(inputFile, line);
+        while(getline(inputFile, line)){
             values.push_back(line);
         }
 
@@ -45,89 +75,79 @@ auto read_lines = [](const string& filePath) -> optional<vector<string>>{
         return nullopt;
     }
 };
+#pragma endregion IO Reading
 
-auto split_line = [](const string& line, const char seperator){
-    int startIndex = 0;
-    int endIndex = 0;
-    int currentIteration = 0;
+#pragma region tokenize
+//Step 3: Tokenize the text
+auto remove_special_characters = [](string str) {
+    str.erase(remove_if(str.begin(), str.end(), [](char c) {
+        return !isalnum(c) && c != ' ';
+    }), str.end());
+    return str;
+};
 
-    int lineLength = line.length();
+auto tokenize = [](const std::string& line, const char separator) -> std::vector<Word> {
+    std::vector<Word> splittedWords;
 
-    vector<Word> splittedWords;
-    for_each(line.begin(), line.end(), [&](const char c){
-        if(c == seperator || currentIteration == lineLength - 1){
-            endIndex = currentIteration;
-            string subString = "";
-            subString.append(line, startIndex, endIndex - startIndex);
-            Word word {subString, startIndex};
+    size_t startIndex = 0;
+    size_t endIndex = line.find(separator);
+
+    while (endIndex != std::string::npos) {
+        std::string subString = line.substr(startIndex, endIndex - startIndex);
+        subString = remove_special_characters(subString);
+
+        std::transform(subString.begin(), subString.end(), subString.begin(), [](unsigned char c) {
+            return std::tolower(c);
+        });
+
+        if (!subString.empty()) {
+            Word word{subString, static_cast<int>(startIndex)};
             splittedWords.push_back(word);
-            currentIteration++;
-            startIndex = endIndex + 1;
         }
-        else{
-            currentIteration++;
-        }
+
+        startIndex = endIndex + 1;
+        endIndex = line.find(separator, startIndex);
+    }
+
+    // Process the last token after the last separator
+    std::string lastToken = line.substr(startIndex, endIndex);
+    lastToken = remove_special_characters(lastToken);
+    std::transform(lastToken.begin(), lastToken.end(), lastToken.begin(), [](unsigned char c) {
+        return std::tolower(c);
     });
+
+    if (!lastToken.empty()) {
+        Word word{lastToken, static_cast<int>(startIndex)};
+        splittedWords.push_back(word);
+    }
 
     return splittedWords;
 };
 
-// auto filter_wordResult = [](const vector<WordCount>& words, const vector<string>& filter){
-//     vector<WordCount> filteredWordResult;
+auto split_book_into_chapters = [](const string& book) -> vector<string> {
+    regex chapter_regex(R"(CHAPTER \d+)");
+    sregex_token_iterator chapters_begin(book.begin(), book.end(), chapter_regex, -1);
+    sregex_token_iterator chapters_end;
+    vector<string> chapters(chapters_begin, chapters_end);
+    chapters.erase(chapters.begin());
+    return chapters;
+};
 
-//     copy_if(words.begin(), words.end(), back_inserter(filteredWordResult), [=](const WordCount wordData){
-//         return find(filter.begin(), filter.end(), wordData.word) != filter.end();
-//     });
-
-//     return filteredWordResult;
-// };
-
-auto filter_words = [](const vector<Word>& words, const vector<string>& filter){
+//Step 4: Filter the words
+auto filter_words = [](const vector<Word>& words, const vector<string>& filter) -> vector<Word> {
     vector<Word> filterWords;
 
-    copy_if(words.begin(), words.end(), back_inserter(filterWords), [=](const Word word){
-        return find(filter.begin(), filter.end(), word.str) != filter.end();
+    copy_if(words.begin(), words.end(), back_inserter(filterWords), [=](const Word& word){
+        return std::find_if(filter.begin(), filter.end(), [&](const std::string& filterWord) {
+            return filterWord == word.str;
+        }) != filter.end();
     });
 
     return filterWords;
 };
-#pragma endregion IO Reading
 
-#pragma region map words
-auto map_words = [](const vector<Word>& words) -> map<string, vector<Word>>{
-    map<string, vector<Word>> map;
-    for(Word word : words){
-        vector<Word> words;
-        for(Word word2: words){
-            if(word.str == word2.str){
-                words.push_back(word2);
-            }
-        }
-        map.insert(make_pair(word.str, words));
-    }
-
-    return map;
-};
-
-auto get_term_densityv2 = [](const vector<Word>& words){
-    if(words.size() < 2){
-        return -1.0;
-    }
-
-    double distanceSum = 0;
-    for (auto it = words.begin(); it != words.end(); ++it) {
-        auto next = it + 1;
-        if(next != words.end()){
-            int distance = it->indexInText - next->indexInText;
-            distanceSum += distance;
-        }
-    }
-
-    return distanceSum / words.size();
-};
-
-auto calculate_wordCount = [](const map<string, vector<Word>>& wordMap ) ->
-vector<WordCount>{
+// Step 5: Count occurrences
+auto calculate_wordCount = [](const map<string, vector<Word>>& wordMap) -> vector<WordCount> {
     vector<WordCount> result;
 
     for_each(wordMap.begin(), wordMap.end(), [&](const pair<string, vector<Word>>& pair){
@@ -137,6 +157,37 @@ vector<WordCount>{
     });
 
     return result;
+};
+#pragma endregion tokenize
+
+#pragma region map words
+auto map_words = [](const vector<Word>& words) -> map<string, vector<Word>> {
+    map<string, vector<Word>> wordMap;
+    for(const Word& word : words){
+        auto it = wordMap.find(word.str);
+        if(it != wordMap.end()){
+            it->second.push_back(word);
+        }
+        else{
+            wordMap.insert({word.str, {word}});
+        }
+    }
+    return wordMap;
+};
+
+// Step 6: Calculate term density
+auto calculate_density = [](const vector<Word>& words) -> double {
+    if(words.size() < 2){
+        return -1.0;
+    }
+
+    double distanceSum = accumulate(words.begin(), words.end() - 1, 0.0, [](double sum, const Word& word){
+        auto next = &word + 1;
+        int distance = next->indexInText - word.indexInText;
+        return sum + distance;
+    });
+
+    return distanceSum / (words.size() - 1);
 };
 
 auto get_relation_value = [](const vector<WordCount>& wordData, const double& density){
@@ -148,73 +199,71 @@ auto get_relation_value = [](const vector<WordCount>& wordData, const double& de
 };
 #pragma endregion map words
 
-// output (debug)
-void outputStrings(const vector<string>& terms){
-    for(string term : terms){
-        cout << term << endl;
+const string relationToString(const Relation rel) {
+    switch (rel) {
+        case Relation::WAR:
+            return "war";
+        case Relation::PEACE:
+            return "peace";
+        default:
+            return "UNKNOWN";
     }
 }
 
-void outputWords(const vector<Word>& terms){
-    for(Word term : terms){
-        cout << "(" << term.str << "," << term.indexInText << ")" << endl;
-    }
-}
+auto process_chapter = [](const string& chapter) {
+    return [chapter](const auto& filterPeaceTerms, const auto& filterWarTerms) -> Relation {
+        auto chapter_words = tokenize(chapter, ' ');
 
-int main(){
-    // get all terms
-    vector<string> peaceTerms = read_lines("./data/peace_terms.txt").value();
-    vector<string> warTerms = read_lines("./data/war_terms.txt").value();
+        auto warWords = filterWarTerms(chapter_words);
+        auto peaceWords = filterPeaceTerms(chapter_words);
 
-    // define filter functions
+        auto warMap = map_words(warWords);
+        auto peaceMap = map_words(peaceWords);
+
+        auto warResult = calculate_wordCount(warMap);
+        auto peaceResult = calculate_wordCount(peaceMap);
+
+        auto warDensity = calculate_density(warWords);
+        auto peaceDensity = calculate_density(peaceWords);
+
+        int warRelationValue = get_relation_value(warResult, warDensity);
+        int peaceRelationValue = get_relation_value(peaceResult, peaceDensity);
+
+        return ((warRelationValue > peaceRelationValue) ? Relation::WAR : Relation::PEACE);
+    };
+};
+
+auto process_all_chapters = [](const vector<string>& chapters) {
+    return [chapters](const auto& filterPeaceTerms, const auto& filterWarTerms) -> map<int, Relation> {
+        map<int, Relation> chapter_densities;
+        transform(chapters.begin(), chapters.end(), inserter(chapter_densities, chapter_densities.begin()),
+              [&](const string& chapter) {
+                  static int chapter_number = 1;
+                  return make_pair(chapter_number++, process_chapter(chapter)(filterPeaceTerms, filterWarTerms));
+              });
+        return chapter_densities;
+    };
+};
+
+//Step 1
+int main() {
+    // Step 7: Read input files and tokenize the text
+    auto peaceTerms = read_lines("./data/peace_terms.txt").value();
+    auto warTerms = read_lines("./data/war_terms.txt").value();
+    auto book = read_lines("./data/book.txt");
+    auto bookv = book.value();
+    auto book_string = accumulate(bookv.begin(), bookv.end(), string(), [](string accumulator, const string& line){
+        return accumulator + line + " ";
+    });
+
     auto filterPeaceTerms = bind(filter_words, _1, peaceTerms);
     auto filterWarTerms = bind(filter_words, _1, warTerms);
 
-    outputStrings(peaceTerms);
-    outputStrings(warTerms);
+    auto chapters = split_book_into_chapters(book_string);
 
-    // get all lines from file
-    vector<string> textLines = read_lines("./data/test.txt").value();
+    auto chapter_densities = process_all_chapters(chapters)(filterPeaceTerms, filterWarTerms);
 
-    // flatten the lines to one string
-    string tmp;
-    for(string line : textLines){
-        tmp.append(line);
-    }
-
-    // split text to Words
-    vector<Word> words = split_line(tmp, ' ');
-
-    // filter war and peace tearms from text
-    vector<Word> warWords = filterWarTerms(words);
-    vector<Word> peaceWords = filterPeaceTerms(words);
-
-    // map words (key: string, value: list of words)
-    map<string, vector<Word>> warMap = map_words(warWords);
-    map<string, vector<Word>> peaceMap = map_words(peaceWords);
-
-    // calculate word count
-    vector<WordCount> warResult = calculate_wordCount(warMap);
-    vector<WordCount> peaceResult = calculate_wordCount(peaceMap);
-
-    // calculate term density
-    double warDensity = get_term_densityv2(warWords);
-    double peaceDensity = get_term_densityv2(peaceWords);
-
-    // calculate relation score
-    int warRelationValue = get_relation_value(warResult, warDensity);
-    int peaceRelationValue = get_relation_value(peaceResult, peaceDensity);
-
-    // compare relation score
-    if(warRelationValue > peaceRelationValue){
-        cout << "war related" << endl;
-    } 
-    else{
-        cout << "peace related" << endl;
-    }
-
-    // vector<Word> splittedWords = split_line(unsplittedline, ' ');
-    // outputWords(splittedWords);
+    print_evaluations(chapter_densities);
 
     return 0;
 }
