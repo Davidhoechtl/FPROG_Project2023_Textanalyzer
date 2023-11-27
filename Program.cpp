@@ -37,19 +37,6 @@ enum struct Relation {
     PEACE = 1
 };
 
-// output (debug)
-void outputStrings(const vector<string>& terms) {
-    for_each(terms.begin(), terms.end(), [](const string& term){
-        cout << term << endl;
-    });
-}
-
-void outputWords(const vector<Word>& terms) {
-    for_each(terms.begin(), terms.end(), [](const Word& term){
-        cout << "(" << term.str << "," << term.indexInText << ")" << endl;
-    });
-}
-
 void print_evaluations(const map<int, Relation>& evaluations) {
     for_each(evaluations.begin(), evaluations.end(), [](const auto& pair) {
         cout << "Chapter " << pair.first << ": " << relationToString(pair.second) << "-related" << endl;
@@ -86,40 +73,29 @@ auto remove_special_characters = [](string str) {
     return str;
 };
 
-auto tokenize = [](const std::string& line, const char separator) -> std::vector<Word> {
-    std::vector<Word> splittedWords;
+auto tokenize = [](const string& line, const char separator) -> vector<Word> {
+    vector<Word> splittedWords;
 
-    size_t startIndex = 0;
-    size_t endIndex = line.find(separator);
+    vector<string> tokens;
+    istringstream iss(line);
+    string token;
+    while (getline(iss, token, separator)) {
+        tokens.push_back(token);
+    }
 
-    while (endIndex != std::string::npos) {
-        std::string subString = line.substr(startIndex, endIndex - startIndex);
-        subString = remove_special_characters(subString);
+    transform(tokens.begin(), tokens.end(), std::back_inserter(splittedWords), [&](const std::string& token) {
+        string subString = remove_special_characters(token);
 
-        std::transform(subString.begin(), subString.end(), subString.begin(), [](unsigned char c) {
-            return std::tolower(c);
+        transform(subString.begin(), subString.end(), subString.begin(), [](unsigned char c) {
+            return tolower(c);
         });
 
         if (!subString.empty()) {
-            Word word{subString, static_cast<int>(startIndex)};
-            splittedWords.push_back(word);
+            return Word{subString, static_cast<int>(token.find(subString))};
+        } else {
+            return Word{};
         }
-
-        startIndex = endIndex + 1;
-        endIndex = line.find(separator, startIndex);
-    }
-
-    // Process the last token after the last separator
-    std::string lastToken = line.substr(startIndex, endIndex);
-    lastToken = remove_special_characters(lastToken);
-    std::transform(lastToken.begin(), lastToken.end(), lastToken.begin(), [](unsigned char c) {
-        return std::tolower(c);
     });
-
-    if (!lastToken.empty()) {
-        Word word{lastToken, static_cast<int>(startIndex)};
-        splittedWords.push_back(word);
-    }
 
     return splittedWords;
 };
@@ -250,8 +226,18 @@ int main() {
     // Step 7: Read input files and tokenize the text
     auto peaceTerms = read_lines("./data/peace_terms.txt").value();
     auto warTerms = read_lines("./data/war_terms.txt").value();
+    if(peaceTerms.empty() || warTerms.empty()){
+        cout << "Error reading peace_terms.txt or war_terms.txt" << endl;
+        return 1;
+    }
+
     auto book = read_lines("./data/book.txt");
-    auto bookv = book.value();
+    if (!book.has_value()) {
+        cout << "Error reading book.txt" << endl;
+        return 1;
+    }
+
+    const auto bookv = book.value();
     auto book_string = accumulate(bookv.begin(), bookv.end(), string(), [](string accumulator, const string& line){
         return accumulator + line + " ";
     });
