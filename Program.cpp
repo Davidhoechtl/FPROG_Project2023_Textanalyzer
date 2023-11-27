@@ -9,6 +9,7 @@
 #include <numeric>
 #include <map>
 #include <regex>
+#include <sstream>
 
 using namespace std;
 using namespace std::placeholders;
@@ -25,11 +26,6 @@ struct Word {
 struct WordCount{
     string word;
     int count;
-};
-
-struct TermDensity {
-    int warDensity;
-    int peaceDensity;
 };
 
 enum struct Relation {
