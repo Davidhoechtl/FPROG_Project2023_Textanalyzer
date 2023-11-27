@@ -9,6 +9,7 @@
 #include <numeric>
 #include <map>
 #include <regex>
+#include <sstream>
 
 using namespace std;
 using namespace std::placeholders;
@@ -25,11 +26,6 @@ struct Word {
 struct WordCount{
     string word;
     int count;
-};
-
-struct TermDensity {
-    int warDensity;
-    int peaceDensity;
 };
 
 enum struct Relation {
@@ -79,6 +75,7 @@ auto tokenize = [](const string& line, const char separator) -> vector<Word> {
     vector<string> tokens;
     istringstream iss(line);
     string token;
+    int index = 0;
     while (getline(iss, token, separator)) {
         tokens.push_back(token);
     }
@@ -91,7 +88,9 @@ auto tokenize = [](const string& line, const char separator) -> vector<Word> {
         });
 
         if (!subString.empty()) {
-            return Word{subString, static_cast<int>(token.find(subString))};
+            Word word{subString, index};
+            index += token.size() + 1; // Increment index by the size of the token plus 1 for the separator
+            return word;
         } else {
             return Word{};
         }
@@ -139,15 +138,9 @@ auto calculate_wordCount = [](const map<string, vector<Word>>& wordMap) -> vecto
 #pragma region map words
 auto map_words = [](const vector<Word>& words) -> map<string, vector<Word>> {
     map<string, vector<Word>> wordMap;
-    for(const Word& word : words){
-        auto it = wordMap.find(word.str);
-        if(it != wordMap.end()){
-            it->second.push_back(word);
-        }
-        else{
-            wordMap.insert({word.str, {word}});
-        }
-    }
+    for_each(words.begin(), words.end(), [&wordMap](const Word& word) {
+        wordMap[word.str].push_back(word);
+    });
     return wordMap;
 };
 
@@ -171,7 +164,7 @@ auto get_relation_value = [](const vector<WordCount>& wordData, const double& de
         return accumulator + item.count;
     });
 
-    return sumCount + (1000 - density);
+    return sumCount + (200 - density);
 };
 #pragma endregion map words
 

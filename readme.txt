@@ -5,9 +5,12 @@ Authors: {David Höchtl, Maximilian Mörth, Armin Islamovic}
 
 To compile make sure that the input book is located in "./data/book.txt", the peace terms in "peace_terms.txt" and the war terms in "war_terms.txt".
 
-To compile go to the command line: make TextAnalyzer
+To compile the program go to the command line: make TextAnalyzer
+To compile the tests: make Test
 To run the code after compiling: ./out/TextAnalyzer
+To run the tests after compiling: ./out/Tests
 
-## Testing
- - Windows: ./run.bat
- - Linux:   ./run.sh
+or to compile and run all: 'make all' or 'make'
+
+## Compile incl. Testing Script
+ - on Linux:   'sh ./run.sh'
